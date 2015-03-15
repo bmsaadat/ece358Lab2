@@ -4,11 +4,14 @@
  *  Created on: Mar 14, 2015
  *      Author: behrozsaadat
  */
-
+#ifndef ABP_H_
+#define ABP_H_
 #include "Lab2_functions.h"
 #include <queue>
 #include <vector>
 #include <functional>
+
+using std::string;
 
 class ABP {
 protected:
@@ -46,8 +49,8 @@ protected:
 	std::priority_queue<DiscreteEvent, std::vector<DiscreteEvent>, LessThanByTime> DES;
 	void insert_event(EventType type, double time, bool errorFlag, int sequenceNumber);
     DiscreteEvent* send(int packetLength, double bitErrorRate);
-    void finishSending(DiscreteEvent *event);
+    virtual void finishSending(DiscreteEvent *event);
 public:
-	void simulate();
+	void simulate(string outputFile);
 };
-
+#endif

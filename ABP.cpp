@@ -84,7 +84,7 @@ void ABP::finishSending(DiscreteEvent *event) {
     DES.pop();
 }
 
-void ABP::simulate() {
+void ABP::simulate(string outputFile) {
     // Length of frame header (H)
     headerLength = 432;
     // Length of packet (l)
@@ -101,7 +101,7 @@ void ABP::simulate() {
     double ber_array[3] = {0.0, 0.00001, 0.0001};
     
     // CSV File
-    ofstream output_file("ABP.csv");
+    ofstream output_file(outputFile);
     for (double j = 2.5; j <= 12.5; j += 2.5) {
         for (propagationDelay = 0.005; propagationDelay <= 0.25; propagationDelay += 0.245) {
             for (int k = 0; k < 3; k ++) {
@@ -134,12 +134,4 @@ void ABP::simulate() {
         }
         output_file << endl;
     }
-}
-
-int main() {
-    // Seeding random number generator
-    srand (time(NULL));
-    ABP abpSimulator;
-    abpSimulator.simulate();
-    return 0;
 }
