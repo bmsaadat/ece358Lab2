@@ -62,21 +62,25 @@ DiscreteEvent* ABP::send(int totalPacketLength, double ber) {
 }
 
 void ABP::finishSending(DiscreteEvent *event) {
-    DiscreteEvent newTimeEvent;
+    DiscreteEvent timeOutEvent = DES.top();
     if (event == NULL) {
-        newTimeEvent = DES.top();
+        // Set the current time to the timeout time, cause the packet completely failed
+        currentTime = timeOutEvent.getTime();
     } else {
         DiscreteEvent ackEvent = *event;
         DES.push(ackEvent);
-        newTimeEvent = DES.top();
         if (!ackEvent.getErrorFlag() && ackEvent.getSequenceNumber() == nextExpectedAck) {
+            // Set the current time to the earliest event in the DES
+            currentTime = DES.top().getTime();
             sequenceNumber = (sequenceNumber + 1) % 2;
             nextExpectedAck = (nextExpectedAck + 1) % 2;
             numberOfPacketsFinished++;
+        } else {
+            // Set the current time to the timeout cause the packet has error and wasn't delivered properly
+            currentTime = timeOutEvent.getTime();
         }
         DES.pop();
     }
-    currentTime = newTimeEvent.getTime();
     DES.pop();
 }
 
