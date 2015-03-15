@@ -20,8 +20,8 @@ void ABP_NAK::finishSending(DiscreteEvent *event) {
             nextExpectedAck = (nextExpectedAck + 1) % 2;
             numberOfPacketsFinished++;
         } else {
-            // Set the current time to the timeout cause the packet has error and wasn't delivered properly
-            currentTime = timeOutEvent.getTime();
+            // The only line that changes, as there is no longer a timeout when a packet arrives in error. The packet is retransmitted and thus the current time will just be the ack time
+            currentTime = ackEvent.getTime();
         }
         DES.pop();
     }
