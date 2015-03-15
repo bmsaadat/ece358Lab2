@@ -38,13 +38,16 @@ protected:
     
     // Experiment Duration
     int numberOfPackets;
+    
+    int numberOfPacketsFinished;
 
     
 	// Priority queue of events, ordered by the time
 	std::priority_queue<DiscreteEvent, std::vector<DiscreteEvent>, LessThanByTime> DES;
 	void insert_event(EventType type, double time, bool errorFlag, int sequenceNumber);
-    DiscreteEvent send();
+    DiscreteEvent* send(int packetLength, double bitErrorRate);
+    void finishSending(DiscreteEvent *event);
 public:
-	void simulate(double delta);
+	void simulate();
 };
 
