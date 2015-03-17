@@ -93,7 +93,7 @@ void ABP::simulate(string outputFile) {
     channelCapacity = 5000000;
     
     // Experiment Duration
-    numberOfPackets = 5000;
+    numberOfPackets = 15000;
 
     int totalPacketLength = headerLength + packetLength;
     double transmissionDelay = (double)totalPacketLength / (double)channelCapacity;
