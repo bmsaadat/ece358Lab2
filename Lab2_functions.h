@@ -25,6 +25,12 @@ public:
 	int getSequenceNumber() const;
 };
 
+class Packet {
+public:
+    int sequenceNumber;
+    double time;
+};
+
 struct LessThanByTime {
 	bool operator()(const DiscreteEvent &lhs, const DiscreteEvent &rhs) const{
 		return (lhs.getTime() > rhs.getTime());

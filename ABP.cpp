@@ -12,7 +12,7 @@ void ABP::insert_event(EventType type, double time, bool errorFlag, int sequence
 }
 
 // Returns 2 if the errorCount is >= 5, returns 1 if there is at least 1 error but less than 5 errors, returns 0 if there are no errors at all.
-int checkPacketForError(int length, double ber) {
+int ABP::checkPacketForError(int length, double ber) {
     int errorCount = 0;
     bool hasError = false;
     for (int i = 0; i < length; i ++) {
@@ -93,7 +93,7 @@ void ABP::simulate(string outputFile) {
     channelCapacity = 5000000;
     
     // Experiment Duration
-    numberOfPackets = 15000;
+    numberOfPackets = 5000;
 
     int totalPacketLength = headerLength + packetLength;
     double transmissionDelay = (double)totalPacketLength / (double)channelCapacity;
@@ -129,7 +129,8 @@ void ABP::simulate(string outputFile) {
                     finishSending(returnedEvent);
                 }
                 double throughPut = (double)(numberOfPacketsFinished * packetLength) / currentTime;
-                output_file << throughPut << ",";
+                output_file.precision(2);
+                output_file << fixed << throughPut << ",";
             }
         }
         output_file << endl;

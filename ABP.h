@@ -47,6 +47,7 @@ protected:
     
 	// Priority queue of events, ordered by the time
 	std::priority_queue<DiscreteEvent, std::vector<DiscreteEvent>, LessThanByTime> DES;
+    int checkPacketForError(int length, double ber);
 	void insert_event(EventType type, double time, bool errorFlag, int sequenceNumber);
     DiscreteEvent* send(int packetLength, double bitErrorRate);
     virtual void finishSending(DiscreteEvent *event);
