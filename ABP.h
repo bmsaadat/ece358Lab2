@@ -52,6 +52,6 @@ protected:
     DiscreteEvent* send(int packetLength, double bitErrorRate);
     virtual void finishSending(DiscreteEvent *event);
 public:
-	void simulate(string outputFile);
+	void simulate();
 };
 #endif

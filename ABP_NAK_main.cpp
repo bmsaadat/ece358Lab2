@@ -8,6 +8,6 @@ int main() {
     // Seeding random number generator
     srand (time(NULL));
     ABP_NAK simulator;
-    simulator.simulate("ABP_NAK.csv");
+    simulator.simulate();
     return 0;
 }

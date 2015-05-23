@@ -8,6 +8,6 @@ int main() {
     // Seeding random number generator
     srand (time(NULL));
     GBN simulator;
-    simulator.simulate("GBN.csv");
+    simulator.simulate();
     return 0;
 }

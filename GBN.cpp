@@ -1,69 +1,12 @@
 #include <iostream>
-#include <fstream>
 #include <math.h>
 #include "GBN.h"
 
 using namespace std;
 
-void GBN::print(int count)
-{
-    if(!count)
-    {
-        cout << endl;
-        return;
-    }
-    Packet x= buffer.front();
-    buffer.pop();
-    cout << x.sequenceNumber << " ";
-    buffer.push(x);
-    print(--count);
-}
-
-void GBN::finishSending(DiscreteEvent *event) {
-    
-    if (event == NULL) {
-        cout << "Packet dropped..." << endl;
-        return;
-    }
-    DES.push(*event);
-    
-    DiscreteEvent nextEvent = DES.top();
-    DES.pop();
-    if (nextEvent.getType() == TIMEOUT) {
-        cout << "Popped TIMEOUT at: " << nextEvent.getTime() << endl;
-        currentTime = nextEvent.getTime();
-        clearBuffer();
-        clearDES();
-        bufferCount = 0;
-        packetSequenceNumber = 0;
-        return;
-    } else if (nextEvent.getType() == ACK) {
-        cout << "Popped ACK: " << nextEvent.getSequenceNumber() << endl;
-        Packet packet = buffer.front();
-        if (!nextEvent.getErrorFlag() && packet.sequenceNumber != nextEvent.getSequenceNumber()) {
-            cout << "Finishing packet: " << nextEvent.getSequenceNumber() << endl;
-            cout << "Difference: " << (nextEvent.getSequenceNumber() - packet.sequenceNumber) << endl;
-            if (!buffer.empty()) {
-                buffer.pop();
-            }
-            bufferCount--;
-            sequenceNumber = (sequenceNumber + 1) % (n + 1);
-            nextExpectedAck = (nextExpectedAck + 1) % (n + 1);
-            numberOfPacketsFinished++;
-            currentTime = nextEvent.getTime();
-        } else {
-            if (!buffer.empty()) {
-                buffer.pop();
-            }
-            //sequenceNumber = (sequenceNumber + 1) % (n + 1);
-            nextExpectedAck = (nextExpectedAck + 1) % (n + 1);
-        }
-    }
-    
-}
-
-DiscreteEvent* GBN::send(int totalPacketLength, double ber) {
-    
+DiscreteEvent* GBN::send() {
+    int totalPacketLength = headerLength + packetLength;
+    double ber = bitErrorRate;
     // Sender
     bool errorFlag = false;
     
@@ -75,11 +18,9 @@ DiscreteEvent* GBN::send(int totalPacketLength, double ber) {
     }
     
     
-    
     // Receiver
-    if (!errorFlag && sequenceNumber == nextExpectedFrame) {
+    if (!errorFlag && SN[counter] == nextExpectedFrame) {
         nextExpectedFrame = (nextExpectedFrame + 1) % (n + 1);
-        //cout << "Next Expected: " << nextExpectedFrame << endl;
     }
     
     int receiverToSenderErrorState = checkPacketForError(headerLength, ber);
@@ -89,11 +30,10 @@ DiscreteEvent* GBN::send(int totalPacketLength, double ber) {
         errorFlag = true;
     }
     
-    currentTime = (buffer.front()).time + 2 * propagationDelay + ((double)headerLength / (double)channelCapacity);
+    double newTime = T[counter] + 2 * propagationDelay + ((double)headerLength / (double)channelCapacity);
     static DiscreteEvent event;
-    int newSN = ((buffer.front()).sequenceNumber + 1) % (n + 1);
-    cout << "Adding ACK with sequence: " << newSN  << " time: " << currentTime << endl;
-    event.setValues(ACK, currentTime, errorFlag, newSN);
+    
+    event.setValues(ACK, newTime, errorFlag, nextExpectedFrame);
     return &event;
 }
 
@@ -103,17 +43,10 @@ void GBN::purgeTimeout() {
         DiscreteEvent top = DES.top();
         if (top.getType() != TIMEOUT) {
             copyDES.push(top);
-        } else {
-            //cout << "Deleted Timeout: " << top.getTime() << endl;
         }
         DES.pop();
     }
     DES = copyDES;
-}
-
-void GBN::clearBuffer() {
-    std::queue<Packet> newBuffer;
-    buffer = newBuffer;
 }
 
 void GBN::clearDES() {
@@ -121,7 +54,98 @@ void GBN::clearDES() {
     DES = newDES;
 }
 
-void GBN::simulate(string outputFile) {
+void GBN::senderFunction() {
+    int totalPacketLength = headerLength + packetLength;
+    double transmissionDelay = (double)totalPacketLength / (double)channelCapacity;
+
+    while(counter < n) {
+        if (numberOfPacketsFinished >= numberOfPackets) {
+            break;
+        }
+        
+        next_expected_ack[counter] = (SN[counter] + 1) % (n+1);
+
+        currentTime += transmissionDelay;
+        
+        T[counter] = currentTime;
+        if (counter == 0) {
+            insert_event(TIMEOUT, T[counter] + delta, false, sequenceNumber);
+        }
+        DiscreteEvent *event = send();
+        
+        if (event != NULL) {
+            DES.push(*event);
+        }
+        
+        if (!DES.empty()) {
+            DiscreteEvent firstEvent = DES.top();
+            if (firstEvent.getTime() < T[counter] && firstEvent.getType() == TIMEOUT) {
+                clearDES();
+                counter = 0;
+                
+                nextExpectedFrame = SN[0];
+                continue;
+            }
+            
+            if (firstEvent.getTime() < T[counter] && firstEvent.getType() == ACK && !firstEvent.getErrorFlag()) {
+                bool isNextExpected = false;
+                for (int next_expected_index = 0; next_expected_index < next_expected_ack.size(); next_expected_index++) {
+                    if (next_expected_ack[next_expected_index] == firstEvent.getSequenceNumber()) {
+                        isNextExpected = true;
+                    }
+                }
+                if (isNextExpected) {
+                    P = SN[0];
+                    shiftLeft((firstEvent.getSequenceNumber() - P + n + 1) % (n + 1));
+                    purgeTimeout();
+                    insert_event(TIMEOUT, T[0] + delta, false, sequenceNumber);
+                } else {
+                    DES.pop();
+                }
+            }
+        }
+        
+        int tmpCount = counter + 1;
+        if (tmpCount < n) {
+            counter = tmpCount;
+            SN[counter] = (SN[counter - 1] + 1) % (n + 1);
+        } else {
+            break;
+        }
+    }
+}
+
+void GBN::shiftLeft(int amount) {
+    numberOfPacketsFinished += amount;
+    
+    counter = (counter - amount + n + 1) % (n + 1);
+    
+    // Shift
+    if (amount > 0) {
+        
+        if (amount < n) {
+            for (int i = amount; i < n; i ++) {
+                SN[i-amount] = SN[i];
+                T[i-amount] = T[i];
+                next_expected_ack[i-amount] = next_expected_ack[i];
+            }
+        } else if (amount == n) {
+            SN[0] = (SN[n-1] + 1) % (n + 1);
+            next_expected_ack[0] = (next_expected_ack[n-1] + 1) % (n + 1);
+            for (int i = 0; i < n - 1; i ++) {
+                SN[i+1] = (SN[i] + 1) % (n + 1);
+                next_expected_ack[i+1] = (next_expected_ack[i] + 1) % (n + 1);
+            }
+        }
+        
+    }
+    // Fill
+    for (int i = n - amount; i < n; i ++) {
+        next_expected_ack[i] = (next_expected_ack[i - 1] + 1) % (n + 1);
+    }
+}
+
+void GBN::simulate() {
     n = 4;
     // Length of frame header (H)
     headerLength = 432;
@@ -131,27 +155,22 @@ void GBN::simulate(string outputFile) {
     channelCapacity = 5000000;
     
     // Experiment Duration
-    numberOfPackets = 8;
+    numberOfPackets = 10000;
     
-    int totalPacketLength = headerLength + packetLength;
-    double transmissionDelay = (double)totalPacketLength / (double)channelCapacity;
+    double ber_array[3] = {0, 0.00001, 0.0001};
+    next_expected_ack.resize(n);
+    SN.resize(n);
+    T.resize(n);
     
-    double ber_array[3] = {0.0001, 0.00001, 0.0001};
     
     // CSV File
-    ofstream output_file(outputFile);
-    //for (double j = 2.5; j <= 12.5; j += 2.5) {
-    for (double j = 2.5; j <= 2.5; j += 2.5) {
-        //for (propagationDelay = 0.005; propagationDelay <= 0.25; propagationDelay += 0.245) {
-        for (propagationDelay = 0.005; propagationDelay <= 0.005; propagationDelay += 0.245) {
-            for (int k = 0; k < 1; k ++) {
+    for (double j = 2.5; j <= 12.5; j += 2.5) {
+        for (propagationDelay = 0.005; propagationDelay <= 0.25; propagationDelay += 0.245) {
+            for (int k = 0; k < 3; k ++) {
                 bitErrorRate = ber_array[k];
                 delta = j * propagationDelay;
                 
-                // The sequence number of the sending frame (SN)
-                sequenceNumber = 0;
-                // The sequence number of the next expected ACK
-                nextExpectedAck = 1;
+                
                 // The sequence number of the next expected frame
                 nextExpectedFrame = 0;
                 
@@ -161,45 +180,67 @@ void GBN::simulate(string outputFile) {
                 numberOfPacketsFinished = 0;
                 
                 clearDES();
-                clearBuffer();
-                bufferCount = 0;
-                packetSequenceNumber = 0;
+                counter = 0;
+                
+                
+                P = 0;
+                for (int i = 0; i < n; i ++) {
+                    SN[i] = 0;
+                    next_expected_ack[i] = SN[i] + 1;
+                }
+                
+                // Call sender function
+                senderFunction();
                 
                 while(numberOfPacketsFinished < numberOfPackets) {
-                    double previousTime = currentTime;
-                    bool newT1 = false;
-                    cout << endl << endl;
-                    cout << "Updating buffer..." << endl;
-                    while(bufferCount < n) {
-                        Packet packet;
-                        packet.sequenceNumber = packetSequenceNumber;
-                        packet.time = previousTime + transmissionDelay;
-                        cout << "Adding packet: " << packet.sequenceNumber << " With time: " << packet.time << endl;
-                        previousTime = packet.time;
-                        buffer.push(packet);
-                        bufferCount++;
-                        packetSequenceNumber = (packetSequenceNumber + 1) % (n + 1);
-                        newT1 = true;
+                    while (!DES.empty()) {
+                        if (numberOfPacketsFinished >= numberOfPackets) {
+                            break;
+                        }
+                        
+                        DiscreteEvent nextEvent = DES.top();
+                        DES.pop();
+                        if (nextEvent.getType() == ACK && nextEvent.getErrorFlag() == true) {
+                            continue;
+                        }
+                        
+                        currentTime = nextEvent.getTime();
+                        if (nextEvent.getType() == TIMEOUT) {
+                            counter = 0;
+                            nextExpectedFrame = SN[0];
+                            clearDES();
+                            senderFunction();
+                        } else if (nextEvent.getType() == ACK && !nextEvent.getErrorFlag()) {
+                            
+                            bool isNextExpected = false;
+                            for (int next_expected_index = 0; next_expected_index < next_expected_ack.size(); next_expected_index++) {
+                                if (next_expected_ack[next_expected_index] == nextEvent.getSequenceNumber()) {
+                                    isNextExpected = true;
+                                }
+                            }
+                            
+                            
+                            if (isNextExpected) {
+                                P = SN[0];
+                                int amountShifted = (nextEvent.getSequenceNumber() - P + n + 1) % (n+1);
+                                shiftLeft(amountShifted);
+                                
+                                purgeTimeout();
+                                insert_event(TIMEOUT, T[0] + delta, false, sequenceNumber);
+                                counter++;
+                                SN[counter] = (SN[counter - 1] + 1) % (n + 1);
+                                senderFunction();
+                            }
+                        }
                     }
-                    
-                    if (newT1) {
-                        purgeTimeout();
-                        double T1 = (buffer.front()).time + delta;
-                        // Add a new timeout
-                        cout << "Pushing timout: " << T1 << endl;
-                        insert_event(TIMEOUT, T1, false, sequenceNumber);
-                    }
-                    
-                    DiscreteEvent *returnedEvent = send(totalPacketLength, bitErrorRate);
-                    finishSending(returnedEvent);
                 }
-                double throughPut = (double)(numberOfPacketsFinished * packetLength) / currentTime;
-                cout << "---------" << endl;
-                cout << fixed << throughPut << endl;
-                //output_file.precision(2);
-                //output_file << fixed << throughPut << ",";
+                
+                clearDES();
+                double throughPut = (double)(numberOfPackets * packetLength) / currentTime;                
+                cout.precision(2);
+                cout << fixed << throughPut << ",";
             }
         }
-        output_file << endl;
+        cout << endl;
     }
 }

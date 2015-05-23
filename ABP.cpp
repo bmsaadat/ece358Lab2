@@ -1,5 +1,4 @@
 #include <iostream>
-#include <fstream>
 #include <math.h>
 #include "ABP.h"
 
@@ -84,7 +83,7 @@ void ABP::finishSending(DiscreteEvent *event) {
     DES.pop();
 }
 
-void ABP::simulate(string outputFile) {
+void ABP::simulate() {
     // Length of frame header (H)
     headerLength = 432;
     // Length of packet (l)
@@ -101,7 +100,6 @@ void ABP::simulate(string outputFile) {
     double ber_array[3] = {0.0, 0.00001, 0.0001};
     
     // CSV File
-    ofstream output_file(outputFile);
     for (double j = 2.5; j <= 12.5; j += 2.5) {
         for (propagationDelay = 0.005; propagationDelay <= 0.25; propagationDelay += 0.245) {
             for (int k = 0; k < 3; k ++) {
@@ -129,10 +127,10 @@ void ABP::simulate(string outputFile) {
                     finishSending(returnedEvent);
                 }
                 double throughPut = (double)(numberOfPacketsFinished * packetLength) / currentTime;
-                output_file.precision(2);
-                output_file << fixed << throughPut << ",";
+                cout.precision(2);
+                cout << fixed << throughPut << ",";
             }
         }
-        output_file << endl;
+        cout << endl;
     }
 }
